@@ -1,0 +1,95 @@
+@startuml
+skinparam sequenceMessageAlign center
+autonumber
+
+actor "Студент" as Student
+participant "Клиентское\nприложение" as Client
+participant "Контроллер\nэкзамена" as Controller
+participant "Сервис\nавторизации" as AuthService
+participant "Сервис\nрасписания" as ScheduleService
+participant "Сервис\nзаданий" as TaskService
+database "База данных" as DB
+participant "Хранилище\nпромежуточных\nданных" as TempStorage
+participant "Сервис\nпроверки" as CheckService
+participant "Система\nуведомлений" as NotificationService
+
+== Начало экзамена ==
+Student -> Client: Запустить экзамен()
+activate Client
+Client -> Controller: запросНачалаЭкзамена()
+activate Controller
+
+Controller -> AuthService: проверитьЛичность()
+activate AuthService
+AuthService --> Controller: результатАвторизации
+deactivate AuthService
+
+Controller -> ScheduleService: проверитьВремяИПопытку()
+activate ScheduleService
+ScheduleService --> Controller: результатПроверкиРасписания
+deactivate ScheduleService
+
+alt Проверки не пройдены (хотя бы одна)
+    Controller --> Client: отклонитьЗапуск(причина)
+    Client --> Student: Показать ошибку()
+else Проверки успешны
+    Controller -> TaskService: выбратьВариант()
+    activate TaskService
+    TaskService -> DB: получитьИндивидуальныйВариант()
+    activate DB
+    DB --> TaskService: текстЗадания
+    deactivate DB
+    TaskService --> Controller: заданиеВыбрано
+    deactivate TaskService
+    
+    Controller -> DB: создатьПопытку()
+    activate DB
+    DB --> Controller: попыткаСоздана
+    deactivate DB
+    
+    Controller --> Client: вернутьТекстЗадания()
+    Client --> Student: Отобразить задание()
+end
+
+== Процесс выполнения ==
+loop Пока идет экзамен (по интервалам)
+    Client -> TempStorage: сохранитьПромежуточныеДанные()
+    activate TempStorage
+    TempStorage --> Client: данныеСохранены
+    deactivate TempStorage
+end
+
+== Завершение (Ручное или по таймеру) ==
+Student -> Client: Сдать экзамен() / Таймер
+Client -> Controller: отправитьОкончательныеФайлы()
+activate Controller
+
+Controller -> CheckService: проверитьНаличиеФайлов()
+activate CheckService
+CheckService --> Controller: результатПроверкиФайлов
+deactivate CheckService
+
+alt Время не закончилось И файлов не хватает
+    Controller --> Client: вернутьКРаботе()
+    Client --> Student: Продолжить выполнение()
+    note right of Student: Возврат к циклу работы
+else Файлы в порядке ИЛИ время вышло
+    Controller -> DB: зафиксироватьРезультат()
+    activate DB
+    DB --> Controller: результатЗафиксирован
+    deactivate DB
+    
+    Controller -> Controller: закрытьПопытку()
+    
+    Controller -> NotificationService: уведомитьПреподавателя()
+    activate NotificationService
+    NotificationService --> Controller: уведомлениеОтправлено
+    deactivate NotificationService
+    
+    Controller --> Client: экзаменЗавершен()
+    Client --> Student: Показать итог()
+end
+deactivate Controller
+deactivate Client
+
+@enduml
