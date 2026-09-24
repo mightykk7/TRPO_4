@@ -1,0 +1,38 @@
+@startuml
+skinparam sequenceMessageAlign center
+title Диаграмма последовательности: Начало и сдача экзамена
+
+actor Студент
+participant ":ClientApp" as Client
+participant ":ExamController" as Controller
+participant ":AuthService" as Auth
+participant ":ScheduleService" as Schedule
+participant ":TaskService" as Task
+participant ":ExamRepository" as Repo
+participant ":ProctoringService" as Proctor
+participant ":NotificationService" as Notify
+
+Студент -> Client : startExam()
+Client -> Controller : requestStart(studentId)
+Controller -> Auth : verifyIdentity(studentId)
+Auth --> Controller : true
+Controller -> Schedule : checkSchedule(studentId)
+Schedule --> Controller : true
+Controller -> Task : generateVariant()
+Task -> Repo : getRandomTask()
+Repo --> Task : taskData
+Task --> Controller : taskText
+Controller -> Repo : createAttempt(studentId, taskId)
+Repo --> Controller : attemptId
+Controller --> Client : showTask(taskText)
+Client --> Студент : Отобразить задание
+
+Студент -> Client : submitExam(files)
+Client -> Controller : finishAttempt(attemptId, files)
+Controller -> Proctor : checkFiles(files)
+Proctor --> Controller : success
+Controller -> Repo : saveFinalResult(attemptId)
+Controller -> Notify : notifyTeacher()
+Controller --> Client : examClosed()
+Client --> Студент : Успешная сдача
+@enduml
